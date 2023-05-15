@@ -1,3 +1,5 @@
 .env
 node_modules/
 presets.db
+dist/
+.vscode/settings.json

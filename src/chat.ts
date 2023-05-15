@@ -1,16 +1,9 @@
-import { Express } from "express";
-import SSE from "express-sse-ts";
-import { ChatOpenAI } from "langchain/chat_models/openai";
-import {
-  AIChatMessage,
-  HumanChatMessage,
-  SystemChatMessage,
-} from "langchain/schema";
-import {
-  ChatCompletionRequestMessage,
-  CreateChatCompletionRequest,
-} from "openai";
-import { Database } from "sqlite3";
+import { Express } from 'express';
+import SSE from 'express-sse-ts';
+import { ChatOpenAI } from 'langchain/chat_models/openai';
+import { AIChatMessage, HumanChatMessage, SystemChatMessage } from 'langchain/schema';
+import { ChatCompletionRequestMessage, CreateChatCompletionRequest } from 'openai';
+import { Database } from 'sqlite3';
 
 interface IMessage {
   content: string;
@@ -20,7 +13,7 @@ interface IMessage {
 export const chatRoutes = (app: Express, db: Database) => {
   const chat = new ChatOpenAI({});
   const sse = new SSE();
-  const controller = new AbortController();
+  let controller: AbortController | null = new AbortController();
 
   app.get("/events", async (req, res, next) => {
     console.log("sse init");
@@ -28,7 +21,8 @@ export const chatRoutes = (app: Express, db: Database) => {
   });
 
   app.post("/abort", async (req, res) => {
-    controller.abort();
+    controller?.abort();
+    controller = new AbortController();
   });
 
   app.post("/trigger", async (req, res, next) => {
@@ -38,20 +32,34 @@ export const chatRoutes = (app: Express, db: Database) => {
     updateChatSettings(streamedChat, req.body);
     console.log("starting chat stream");
     console.log("params", req.body);
-    await streamedChat.call(
-      formatMessages((req.body as CreateChatCompletionRequest).messages),
-      {
-        signal: controller.signal,
-      },
-      [
+    try {
+      await streamedChat.call(
+        formatMessages((req.body as CreateChatCompletionRequest).messages),
         {
-          handleLLMNewToken(token: string) {
-            console.log(JSON.stringify(token));
-            sse.send(JSON.stringify(token));
-          },
+          signal: controller?.signal,
         },
-      ]
-    );
+        [
+          {
+            handleLLMNewToken(token: string) {
+              console.log(JSON.stringify(token));
+              try {
+                sse.send(JSON.stringify(token));
+              } catch (err) {
+                console.error(err);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error) {
+      if ((error as any).message === "Cancel: canceled") {
+        console.log("Request aborted");
+        res.status(200).json({ message: "Request aborted" });
+        return;
+      }
+      next(error);
+    }
+
     res.status(200).json({ message: "Chat stream started" });
   });
   app.post("/chat", async (req, res) => {

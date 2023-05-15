@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "ts-node-dev --respawn --transpile-only src/server.ts"
+    "start": "node dist/index.js"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +23,7 @@
     "express-sse": "^0.5.3",
     "express-sse-ts": "^1.0.2",
     "langchain": "^0.0.75",
+    "lodash": "^4.17.21",
     "openai": "^3.2.1",
     "sqlite3": "^5.1.6"
   }
